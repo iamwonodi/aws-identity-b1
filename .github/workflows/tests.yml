@@ -1,0 +1,67 @@
+name: Tests
+
+# Everything that can be proven without AWS: the scripts, formatting, the lock
+# files, that both roots validate, and the module's mocked tests.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+
+  scripts:
+    name: Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Shellcheck
+        run: shellcheck -S warning scripts/*.sh scripts/ci/*.sh
+
+      - name: Script Tests
+        run: bash scripts/ci/tests/run-all.sh
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Read Terraform Version
+        run: echo "TF_VERSION=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_ENV}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Provider Lock Files
+        run: |
+          bash scripts/ci/check-lock-files.sh infrastructure/management
+          bash scripts/ci/check-lock-files.sh bootstrap
+
+      - name: Validate
+        run: |
+          for root in infrastructure/management bootstrap; do
+            terraform -chdir="${root}" init -backend=false -lockfile=readonly -input=false
+            terraform -chdir="${root}" validate
+          done
+
+      - name: Module Tests
+        working-directory: modules/team-access
+        run: |
+          terraform init -backend=false
+          terraform test

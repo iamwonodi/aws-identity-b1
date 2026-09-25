@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Stands in for terraform: records each call in $FAKE_TF_LOG.
+echo "terraform $*" >> "${FAKE_TF_LOG:?}"
+if [[ "$*" == *"output -raw role_arn"* ]]; then echo "${FAKE_ROLE_ARN:-arn:aws:iam::999999999999:role/acme-identity-ci}"; fi
+exit 0

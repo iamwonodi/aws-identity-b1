@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Stands in for the AWS CLI: the caller's account and the Organization's management account.
+case "$1 $2" in
+  "sts get-caller-identity")            echo "${FAKE_ACCOUNT:-999999999999}" ;;
+  "organizations describe-organization") echo "${FAKE_MANAGEMENT:-999999999999}" ;;
+  *) echo "fake aws: unhandled $*" >&2; exit 99 ;;
+esac

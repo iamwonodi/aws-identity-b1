@@ -1,0 +1,60 @@
+name: Plan
+
+# Plans a pull request under the management-plan GitHub Environment, so the pull
+# request shows who gains or loses access where before anyone merges it.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "infrastructure/**"
+      - "modules/**"
+      - ".terraform-version"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+
+  plan:
+    name: Plan (management)
+    runs-on: ubuntu-latest
+
+    # Never for a pull request from a fork: it must not assume the role.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    environment: management-plan
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Refuse Placeholders
+        run: bash scripts/ci/check-placeholders.sh infrastructure/management
+
+      - name: Read Terraform Version
+        run: echo "TF_VERSION=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_ENV}"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.TF_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform -chdir=infrastructure/management init -input=false -lockfile=readonly
+
+      - name: Terraform Plan
+        run: terraform -chdir=infrastructure/management plan -input=false -lock=false

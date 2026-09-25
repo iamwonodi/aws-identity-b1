@@ -1,0 +1,72 @@
+name: Apply
+
+# Applies on merge, under the management GitHub Environment (reviewers, main
+# only): who may sign in, and where. It plans first and applies that plan.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infrastructure/**"
+      - "modules/**"
+      - ".terraform-version"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: identity-apply
+  cancel-in-progress: false
+
+jobs:
+
+  apply:
+    name: Apply (management)
+    runs-on: ubuntu-latest
+    environment: management
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Refuse Placeholders
+        run: bash scripts/ci/check-placeholders.sh infrastructure/management
+
+      - name: Read Terraform Version
+        run: echo "TF_VERSION=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_ENV}"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.TF_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform -chdir=infrastructure/management init -input=false -lockfile=readonly
+
+      - name: Terraform Plan
+        run: terraform -chdir=infrastructure/management plan -input=false -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform -chdir=infrastructure/management apply -input=false tfplan
+
+      - name: Summary
+        run: |
+          {
+            echo "### Team access"
+            echo
+            echo "Access portal: $(terraform -chdir=infrastructure/management output -raw access_portal)"
+            echo
+            echo '```json'
+            terraform -chdir=infrastructure/management output -json tunnels
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
