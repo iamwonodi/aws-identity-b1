@@ -31,6 +31,7 @@ A tunnel reaches the tools, not the data: inside them each person signs in to th
 | `bootstrap/` | Applied once by an administrator: state bucket, GitHub's OIDC provider, the pipeline's role |
 | `scripts/init-identity.sh` | Sets up a clone and its GitHub Environments |
 | `scripts/bootstrap.sh` | Applies `bootstrap/` and connects the role |
+| `scripts/check-access.sh` | Lists who has a tunnel but no database login, and who has a production login but no tunnel (see `data/README.md`) |
 
 ## Workflows
 
